@@ -21,12 +21,27 @@ limitations under the License.
 
 #include <ostream>
 #include <stdio.h>
+#include <queue>
+#include <string>
+#include <algorithm>
+#include <map>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/mcpwm.h"
 #include "soc/mcpwm_periph.h"
 
+
+// Configuraciones del SERVO
 #define SERVO_PIN 12
+
+#define SERVO_MIN_PULSEWIDTH 500  
+#define SERVO_MAX_PULSEWIDTH 2500 
+#define SERVO_MAX_DEGREE 180  
+
+// #define BUTTON_PIN 14
+
+static int servo_angle = 0; // Current angle of servo (0 or 90)
+// static int last_button_state = 0; // To track the previous state of the button
 
 
 #include "detection_responder.h"
@@ -73,25 +88,122 @@ static void create_gui(void)
 }
 #endif // DISPLAY_SUPPORT
 
-// Function to initialize the MCPWM module for controlling the servo
-void mcpwm_example_gpio_initialize(void) {
-    printf("Initializing MCPWM servo control...\n");
-    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, SERVO_PIN);
+// Function to initialize GPIO for the servos
+static void mcpwm_example_gpio_initialize(void) {
+    printf("Initializing MCPWM servo control GPIO...\n");
+    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, SERVO_PIN); // Set GPIO 12 as PWM0A (Servo 1)
+    
 }
 
-void servo_control(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num, float angle) {
-    // Calculate pulse width (500us - 2500us) corresponding to the angle (-90° - 270°)
-    uint32_t duty_us = (500 + ((angle + 90) / 360.0) * 2000);
-    mcpwm_set_duty_in_us(mcpwm_num, timer_num, MCPWM_OPR_A, duty_us);
+// Function to calculate pulse width for a given angle
+static uint32_t servo_per_degree_init(uint32_t degree_of_rotation) {
+    uint32_t cal_pulsewidth = 0;
+    cal_pulsewidth = (SERVO_MIN_PULSEWIDTH + (((SERVO_MAX_PULSEWIDTH - SERVO_MIN_PULSEWIDTH) * (degree_of_rotation)) / (SERVO_MAX_DEGREE)));
+    return cal_pulsewidth;
 }
+
+
+
+// // Function to initialize the MCPWM module for controlling the servo
+// void mcpwm_example_gpio_initialize(void) {
+//     printf("Initializing MCPWM servo control...\n");
+//     mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, SERVO_PIN);
+// }
+
+// Function to calculate pulse width for a given angle
+// static uint32_t servo_per_degree_init(uint32_t degree_of_rotation) {
+//     uint32_t cal_pulsewidth = 0;
+//     cal_pulsewidth = (SERVO_MIN_PULSEWIDTH + (((SERVO_MAX_PULSEWIDTH - SERVO_MIN_PULSEWIDTH) * (degree_of_rotation)) / (SERVO_MAX_DEGREE)));
+//     return cal_pulsewidth;
+// }
+
+// // Setup GPIO for buttons
+// static void button_initialize(void) {
+//     gpio_config_t io_conf;
+//     io_conf.intr_type = GPIO_INTR_DISABLE; // No interrupts
+//     io_conf.mode = GPIO_MODE_INPUT;
+//     io_conf.pull_down_en = 0;
+//     io_conf.pull_up_en = 1; // Enable pull-up for buttons
+//     io_conf.pin_bit_mask = (1ULL << BUTTON_PIN)
+//     gpio_config(&io_conf);
+// }
+
+// void servo_control(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num, float angle) {
+//     // Calculate pulse width (500us - 2500us) corresponding to the angle (-90° - 270°)
+//     uint32_t duty_us = (500 + ((angle + 90) / 360.0) * 2000);
+//     mcpwm_set_duty_in_us(mcpwm_num, timer_num, MCPWM_OPR_A, duty_us);
+// }
 
 #include <queue>
 #include <iostream>
 
-std::queue<float> lata_scores_queue;
+// std::queue<float> scores_queue;
+std::queue<std::string> scores_queue;
 int flag = 1;
 
-void RespondToDetection(float first_score, float second_score, float third_score, float fourth_score, float fifth_score, float sixth_score, float blank_score) {
+std::string mostFrequentClasses[4];
+static int index = 0;
+int mostFrequentCount = 0;
+
+std::string clave1_pos0 = "blank_score";
+std::string clave1_pos1 = "blank_score";
+std::string clave1_pos2 = "blank_score";
+std::string clave1_pos3 = "blank_score";
+
+std::string clave_locker1[4] = { clave1_pos0, clave1_pos1, clave1_pos2, clave1_pos3};
+
+int flag_servo = 0;
+
+bool detectClasses() {
+  // Initialize MCPWM
+  // mcpwm_example_gpio_initialize();
+
+
+  printf("CLASES DETECTADAS: ");
+  for (int i = 0; i < 4; ++i) {
+    printf("%s ", mostFrequentClasses[i].c_str());
+  }
+  printf("\n");
+
+  bool unlock1 = true;
+
+  for (int i = 0; i<4; ++i) {
+    printf("MOST FREQUENT CLASSES[i]: %s\n", mostFrequentClasses[i].c_str());
+    printf("CLAVE LOCKER[i]: %s\n", clave_locker1[i].c_str());
+    if (mostFrequentClasses[i] != clave_locker1[i]) {
+      printf("CLAVE NO COINCIDE");
+      unlock1 = false;
+      break;
+    }
+  }
+
+  if (unlock1) {
+    return true;
+  } else {
+    return false;
+  }
+
+  // if (unlock1) {
+  //   printf("DESBLOQUEAR LOCKER!!");
+  //   if (flag_servo == 0) {
+  //     printf("MOVIENDO SERVO -90 a 270\n");
+  //     for(int angle=-90; angle<=270; angle++){
+  //       // printf("Moviendo servo");
+  //       servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
+  //     }
+  //   } else if (flag_servo == 1) {
+  //     printf("MOVIENDO SERVO 270 a -90\n");
+  //     for (int angle=270; angle>=-90; angle--){
+  //       // printf("Devolviendo servo");
+  //       servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
+  //     }
+  //   }
+  //   vTaskDelay(pdMS_TO_TICKS(5));
+
+  // }
+}
+
+bool RespondToDetection(float first_score, float second_score, float third_score, float fourth_score, float fifth_score, float sixth_score, float blank_score) {
   // Initialize MCPWM
   mcpwm_example_gpio_initialize();
 
@@ -113,9 +225,106 @@ void RespondToDetection(float first_score, float second_score, float third_score
   int blank_score_int = (blank_score) * 100 + 0.5;
 
 
-  // int lata_score_int = (lata_score) * 100 + 0.5;
+  int max_score_int = std::max({first_score_int, second_score_int, third_score_int, 
+                                  fourth_score_int, fifth_score_int, sixth_score_int, blank_score_int});
 
-  // lata_scores_queue.push(lata_score);
+  // float max_score = max_score_int *100 + 0.5;
+
+  const char* owner;
+
+  printf("MAX SCORE: %d\n", max_score_int);
+
+  // printf("SECOND SCORE INT: %d\n", second_score_int);
+
+  if (max_score_int == first_score_int) {
+      printf("FIRST MAX SCORE: %d\n", first_score_int);
+      owner = "first_score";
+      scores_queue.push(owner);
+  } else if (max_score_int == second_score_int) {
+      printf("SEOND MAX SCORE: %d\n", second_score_int);
+      owner = "second_score";
+      scores_queue.push(owner);
+  } else if (max_score_int == third_score_int) {
+      printf("THIRD MAX SCORE: %d\n", third_score_int);
+      owner = "third_score";
+      scores_queue.push(owner);
+  } else if (max_score_int == fourth_score_int) {
+      printf("FOURTH MAX SCORE: %d\n", fourth_score_int);
+      owner = "fourth_score";
+      scores_queue.push(owner);
+  } else if (max_score_int == fifth_score_int) {
+      printf("FIFTH MAX SCORE: %d\n", fifth_score_int);
+      owner = "fifth_score";
+      scores_queue.push(owner);
+  } else if (max_score_int == sixth_score_int) {
+      printf("SIXTH MAX SCORE: %d\n", sixth_score_int);
+      owner = "sixth_score";
+      scores_queue.push(owner);
+  } else if (max_score_int == blank_score_int) {
+      printf("BLANK MAX SCORE: %d\n", blank_score_int);
+      owner = "blank_score";
+      scores_queue.push(owner);
+  }
+
+  
+
+  if (scores_queue.size() > 5) {
+    scores_queue.pop();
+  }
+
+  if (scores_queue.size() == 5) {
+    std::map<std::string, int> frequencyMap;
+
+    std::queue<std::string> tempQueue = scores_queue;
+    while(!tempQueue.empty()) {
+      frequencyMap[tempQueue.front()]++;
+      tempQueue.pop();
+    }
+
+    std::string mostFrequentClass;
+    int maxCount = 0;
+    for (const auto& entry : frequencyMap) {
+      if (entry.second > maxCount) {
+          maxCount = entry.second;
+          mostFrequentClass = entry.first;
+      }
+    }
+
+    mostFrequentClasses[index] = mostFrequentClass;
+    index = (index + 1) % 4; // Avanzar al siguiente índice circular
+    // printf("Most Frequent Class Stored: %s\n", mostFrequentClass.c_str());
+
+    printf("CLASS DETECTED: %s\n", mostFrequentClass.c_str());
+
+    if (index == 0) {
+      bool unlock_locker = detectClasses();
+
+      if (unlock_locker == true) {
+        printf("mover servo\n");
+        // for(int angle=-90; angle<=270; angle++){
+        //   servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
+        // }
+
+        uint32_t pulsewidth1 = servo_per_degree_init(90); // Calculate pulse width for servo 1
+        mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, pulsewidth1); // Move servo 1
+        printf("Button 1 pressed, moving servo 1 to 90 degrees\n");
+      }
+
+
+
+      std::fill(std::begin(mostFrequentClasses), std::end(mostFrequentClasses), "");
+      // std::queue<std::string> emptyQueue;
+      // std::swap(scores_queue, emptyQueue);
+    }
+
+    std::queue<std::string> emptyQueue;
+    std::swap(scores_queue, emptyQueue);
+
+    return true;
+
+  }
+
+  // int lata_score_int = (lata_score) * 100 + 0.5;
 
   // (void) no_lata_score; // unused
 #if DISPLAY_SUPPORT
@@ -189,5 +398,7 @@ void RespondToDetection(float first_score, float second_score, float third_score
   // }
 
   // servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, -90);
+
+  return false;
 
 }
