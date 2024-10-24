@@ -33,16 +33,10 @@ limitations under the License.
 
 // Configuraciones del SERVO
 #define SERVO_PIN 12
+#define BUTTON_PIN static_cast<gpio_num_t>(15)
 
-#define SERVO_MIN_PULSEWIDTH 500  
-#define SERVO_MAX_PULSEWIDTH 2500 
-#define SERVO_MAX_DEGREE 180  
-
-// #define BUTTON_PIN 14
-
-static int servo_angle = 0; // Current angle of servo (0 or 90)
-// static int last_button_state = 0; // To track the previous state of the button
-
+int last_button_state = 0;
+int locker_open = 0;
 
 #include "detection_responder.h"
 #include "tensorflow/lite/micro/micro_log.h"
@@ -88,27 +82,12 @@ static void create_gui(void)
 }
 #endif // DISPLAY_SUPPORT
 
-// Function to initialize GPIO for the servos
-static void mcpwm_example_gpio_initialize(void) {
-    printf("Initializing MCPWM servo control GPIO...\n");
-    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, SERVO_PIN); // Set GPIO 12 as PWM0A (Servo 1)
-    
+
+// Function to initialize the MCPWM module for controlling the servo
+void mcpwm_example_gpio_initialize(void) {
+    printf("Initializing MCPWM servo control...\n");
+    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, SERVO_PIN);
 }
-
-// Function to calculate pulse width for a given angle
-static uint32_t servo_per_degree_init(uint32_t degree_of_rotation) {
-    uint32_t cal_pulsewidth = 0;
-    cal_pulsewidth = (SERVO_MIN_PULSEWIDTH + (((SERVO_MAX_PULSEWIDTH - SERVO_MIN_PULSEWIDTH) * (degree_of_rotation)) / (SERVO_MAX_DEGREE)));
-    return cal_pulsewidth;
-}
-
-
-
-// // Function to initialize the MCPWM module for controlling the servo
-// void mcpwm_example_gpio_initialize(void) {
-//     printf("Initializing MCPWM servo control...\n");
-//     mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, SERVO_PIN);
-// }
 
 // Function to calculate pulse width for a given angle
 // static uint32_t servo_per_degree_init(uint32_t degree_of_rotation) {
@@ -117,30 +96,18 @@ static uint32_t servo_per_degree_init(uint32_t degree_of_rotation) {
 //     return cal_pulsewidth;
 // }
 
-// // Setup GPIO for buttons
-// static void button_initialize(void) {
-//     gpio_config_t io_conf;
-//     io_conf.intr_type = GPIO_INTR_DISABLE; // No interrupts
-//     io_conf.mode = GPIO_MODE_INPUT;
-//     io_conf.pull_down_en = 0;
-//     io_conf.pull_up_en = 1; // Enable pull-up for buttons
-//     io_conf.pin_bit_mask = (1ULL << BUTTON_PIN)
-//     gpio_config(&io_conf);
-// }
 
-// void servo_control(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num, float angle) {
-//     // Calculate pulse width (500us - 2500us) corresponding to the angle (-90° - 270°)
-//     uint32_t duty_us = (500 + ((angle + 90) / 360.0) * 2000);
-//     mcpwm_set_duty_in_us(mcpwm_num, timer_num, MCPWM_OPR_A, duty_us);
-// }
+
+void servo_control(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num, float angle) {
+    // Calculate pulse width (500us - 2500us) corresponding to the angle (-90° - 270°)
+    uint32_t duty_us = (500 + ((angle + 90) / 360.0) * 2000);
+    mcpwm_set_duty_in_us(mcpwm_num, timer_num, MCPWM_OPR_A, duty_us);
+}
 
 #include <queue>
 #include <iostream>
 
-// std::queue<float> scores_queue;
 std::queue<std::string> scores_queue;
-int flag = 1;
-
 std::string mostFrequentClasses[4];
 static int index = 0;
 int mostFrequentCount = 0;
@@ -152,11 +119,18 @@ std::string clave1_pos3 = "blank_score";
 
 std::string clave_locker1[4] = { clave1_pos0, clave1_pos1, clave1_pos2, clave1_pos3};
 
-int flag_servo = 0;
 
 bool detectClasses() {
-  // Initialize MCPWM
-  // mcpwm_example_gpio_initialize();
+  mcpwm_example_gpio_initialize();
+  // button_initialize();
+
+  mcpwm_config_t pwm_config;
+  pwm_config.frequency = 50;  // Frequency = 50Hz, i.e., 20ms period for servos
+  pwm_config.cmpr_a = 0;      // Duty cycle of PWM0A = 0 (for servo 1)
+  pwm_config.cmpr_b = 0;      // Duty cycle of PWM0B = 0 (for servo 2)
+  pwm_config.counter_mode = MCPWM_UP_COUNTER;
+  pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
+  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config); 
 
 
   printf("CLASES DETECTADAS: ");
@@ -177,45 +151,33 @@ bool detectClasses() {
     }
   }
 
-  if (unlock1) {
+  if (unlock1 == true) {
+    printf("ABRIR LOCKER\n");
+    for(int angle=-90; angle<=270; angle++){
+          servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
+    }
+    locker_open = 1;
+
+    while(locker_open == 1) {
+      int button_state = gpio_get_level(BUTTON_PIN);
+      printf("BUTTON STATE: %d\n", button_state);
+
+      if(button_state == 1 && last_button_state == 0){
+        for(int angle=270; angle>=-90; angle--){
+          servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
+        }
+        locker_open = 0;
+      }
+      last_button_state = button_state;
+    }
+
     return true;
   } else {
     return false;
-  }
-
-  // if (unlock1) {
-  //   printf("DESBLOQUEAR LOCKER!!");
-  //   if (flag_servo == 0) {
-  //     printf("MOVIENDO SERVO -90 a 270\n");
-  //     for(int angle=-90; angle<=270; angle++){
-  //       // printf("Moviendo servo");
-  //       servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
-  //     }
-  //   } else if (flag_servo == 1) {
-  //     printf("MOVIENDO SERVO 270 a -90\n");
-  //     for (int angle=270; angle>=-90; angle--){
-  //       // printf("Devolviendo servo");
-  //       servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
-  //     }
-  //   }
-  //   vTaskDelay(pdMS_TO_TICKS(5));
-
-  // }
+  }     
 }
 
 bool RespondToDetection(float first_score, float second_score, float third_score, float fourth_score, float fifth_score, float sixth_score, float blank_score) {
-  // Initialize MCPWM
-  mcpwm_example_gpio_initialize();
-
-  // Configure MCPWM
-  mcpwm_config_t pwm_config;
-  pwm_config.frequency = 50;    // Frequency = 50Hz, for servo motor
-  pwm_config.cmpr_a = 0;        // Duty cycle of PWMxA = 0
-  pwm_config.cmpr_b = 0;        // Duty cycle of PWMxB = 0
-  pwm_config.counter_mode = MCPWM_UP_COUNTER;
-  pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
-  mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config);
-
   int first_score_int = (first_score) * 100 + 0.5;
   int second_score_int = (second_score) * 100 + 0.5;
   int third_score_int = (third_score) * 100 + 0.5;
@@ -224,49 +186,25 @@ bool RespondToDetection(float first_score, float second_score, float third_score
   int sixth_score_int = (sixth_score) * 100 + 0.5;
   int blank_score_int = (blank_score) * 100 + 0.5;
 
-
   int max_score_int = std::max({first_score_int, second_score_int, third_score_int, 
                                   fourth_score_int, fifth_score_int, sixth_score_int, blank_score_int});
 
-  // float max_score = max_score_int *100 + 0.5;
-
-  const char* owner;
-
-  printf("MAX SCORE: %d\n", max_score_int);
-
-  // printf("SECOND SCORE INT: %d\n", second_score_int);
 
   if (max_score_int == first_score_int) {
-      printf("FIRST MAX SCORE: %d\n", first_score_int);
-      owner = "first_score";
-      scores_queue.push(owner);
+      scores_queue.push("first_score");
   } else if (max_score_int == second_score_int) {
-      printf("SEOND MAX SCORE: %d\n", second_score_int);
-      owner = "second_score";
-      scores_queue.push(owner);
+      scores_queue.push("second_score");
   } else if (max_score_int == third_score_int) {
-      printf("THIRD MAX SCORE: %d\n", third_score_int);
-      owner = "third_score";
-      scores_queue.push(owner);
+      scores_queue.push("third_score");
   } else if (max_score_int == fourth_score_int) {
-      printf("FOURTH MAX SCORE: %d\n", fourth_score_int);
-      owner = "fourth_score";
-      scores_queue.push(owner);
+      scores_queue.push("fourth_score");
   } else if (max_score_int == fifth_score_int) {
-      printf("FIFTH MAX SCORE: %d\n", fifth_score_int);
-      owner = "fifth_score";
-      scores_queue.push(owner);
+      scores_queue.push("fifth_score");
   } else if (max_score_int == sixth_score_int) {
-      printf("SIXTH MAX SCORE: %d\n", sixth_score_int);
-      owner = "sixth_score";
-      scores_queue.push(owner);
+      scores_queue.push("sixth_score");
   } else if (max_score_int == blank_score_int) {
-      printf("BLANK MAX SCORE: %d\n", blank_score_int);
-      owner = "blank_score";
-      scores_queue.push(owner);
+      scores_queue.push("blank_score");
   }
-
-  
 
   if (scores_queue.size() > 5) {
     scores_queue.pop();
@@ -292,29 +230,13 @@ bool RespondToDetection(float first_score, float second_score, float third_score
 
     mostFrequentClasses[index] = mostFrequentClass;
     index = (index + 1) % 4; // Avanzar al siguiente índice circular
-    // printf("Most Frequent Class Stored: %s\n", mostFrequentClass.c_str());
 
     printf("CLASS DETECTED: %s\n", mostFrequentClass.c_str());
 
     if (index == 0) {
-      bool unlock_locker = detectClasses();
-
-      if (unlock_locker == true) {
-        printf("mover servo\n");
-        // for(int angle=-90; angle<=270; angle++){
-        //   servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
-        // }
-
-        uint32_t pulsewidth1 = servo_per_degree_init(90); // Calculate pulse width for servo 1
-        mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, pulsewidth1); // Move servo 1
-        printf("Button 1 pressed, moving servo 1 to 90 degrees\n");
-      }
-
-
-
+      // bool unlock_locker = detectClasses();
+      detectClasses();
       std::fill(std::begin(mostFrequentClasses), std::end(mostFrequentClasses), "");
-      // std::queue<std::string> emptyQueue;
-      // std::swap(scores_queue, emptyQueue);
     }
 
     std::queue<std::string> emptyQueue;
@@ -324,9 +246,6 @@ bool RespondToDetection(float first_score, float second_score, float third_score
 
   }
 
-  // int lata_score_int = (lata_score) * 100 + 0.5;
-
-  // (void) no_lata_score; // unused
 #if DISPLAY_SUPPORT
     if (!camera_canvas) {
       create_gui();
@@ -335,17 +254,9 @@ bool RespondToDetection(float first_score, float second_score, float third_score
     uint16_t *buf = (uint16_t *) image_provider_get_display_buf();
 
     bsp_display_lock(0);
-    // if (lata_score_int < 60) { // treat score less than 60% as no person
-    //   lv_led_off(lata_indicator);
-    // } else {
-    //   lv_led_on(lata_indicator);
-    // }
     lv_canvas_set_buffer(camera_canvas, buf, IMG_WD, IMG_HT, LV_IMG_CF_TRUE_COLOR);
     bsp_display_unlock();
 #endif // DISPLAY_SUPPORT
-  // MicroPrintf("lata score:%d%%, no lata score %d%%",
-  //             lata_score_int, 100 - lata_score_int);
-
   MicroPrintf("1 score: %d%%\n", first_score_int);
   MicroPrintf("2 score: %d%%\n", second_score_int);
   MicroPrintf("3 score: %d%%\n", third_score_int);
@@ -354,51 +265,5 @@ bool RespondToDetection(float first_score, float second_score, float third_score
   MicroPrintf("6 score: %d%%\n", sixth_score_int);
   MicroPrintf("Blank score: %d%%\n", blank_score_int);
 
-  //Probando si funciona la idea del queue
-  //Chequear si queue ha alcanzado su capacidad máxima 
-  //Tengo que calcular cuantas inferencias se realizan en 5 segundos
-  //Ahora hay 5 para que sea más rápido probar con static images
-
-  // if(lata_scores_queue.size() > 30){
-  //   printf("flag: %d\n", flag);
-  //   lata_scores_queue.pop();
-
-  //   float sum = 0.0;
-  //   std::queue<float> temp_queue = lata_scores_queue;
-
-  //   while(!temp_queue.empty()){
-  //     // std::cout << temp_queue.front() << " ";
-  //     sum += temp_queue.front();
-  //     temp_queue.pop();
-  //   }
-  //   std::cout << std::endl;
-
-  //   float average_lata_score = sum / lata_scores_queue.size();
-
-  //   // printf("average_lata_score: %f\n", average_lata_score);
-
-  //   if (average_lata_score >= 0.75 && flag == 1){
-  //     // printf("5 segundos sobre 85%% para lata score\n");
-  //     printf("SERVO A LATA\n");
-  //     for(int angle=-90; angle<=270; angle++){
-  //       servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
-  //     }
-  //     vTaskDelay(pdMS_TO_TICKS(5));
-  //     flag = 0;
-  //   } else if(average_lata_score < 0.50 && flag == 0){
-  //     // printf("5 segundos menos de 85%% para lata score\n");
-  //     printf("SERVO A NOLATA\n");
-  //     for (int angle=270; angle>=-90; angle--){
-  //       servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
-  //     }
-  //     vTaskDelay(pdMS_TO_TICKS(5));
-  //     flag = 1;
-  //   }
-
-  // }
-
-  // servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, -90);
-
   return false;
-
 }

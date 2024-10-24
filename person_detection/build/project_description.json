@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "person_detection",
-    "project_version":    "1",
+    "project_version":    "9ea8ce0-dirty",
     "project_path":       "C:/Users/chiar/Desktop/PDS-P3/person_detection",
     "idf_path":           "C:/Users/chiar/esp/v5.2.1/esp-idf",
     "build_dir":          "C:/Users/chiar/Desktop/PDS-P3/person_detection/build",

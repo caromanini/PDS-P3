@@ -43,18 +43,12 @@ limitations under the License.
 #define TIME_THRESHOLD_SEC 5
 #define FRAME_RATE 10
 
-#define BUTTON_PIN GPIO_NUM_15
+// #define BUTTON_PIN 15
 
-static int last_button_state = 0;
+// static int last_button_state = 0;
 
 int detection_count = 0;
 int frame_count = 0;
-
-// #include "tensorflow/lite/micro/kernels/esp_nn/conv_timer.h"
-// #include "tensorflow/lite/micro/kernels/esp_nn/fully_connected_timer.h"
-// #include "tensorflow/lite/micro/kernels/esp_nn/pooling_timer.h"
-// #include "tensorflow/lite/micro/kernels/esp_nn/softmax_timer.h"
-// #include "tensorflow/lite/micro/kernels/reshape.h"
 
 // Globals, used for compatibility with Arduino-style sketches.
 namespace {
@@ -81,18 +75,6 @@ constexpr int kTensorArenaSize = 150 * 1024;
 static uint8_t *tensor_arena;//[kTensorArenaSize]; // Maybe we should move this to external
 }  // namespace
 
-
-// Setup GPIO for buttons
-static void button_initialize(void) {
-    gpio_config_t io_conf;
-    io_conf.intr_type = GPIO_INTR_DISABLE; // No interrupts
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_ENABLE; // Enable pull-up for buttons
-    io_conf.pin_bit_mask = (1ULL << BUTTON_PIN);
-    gpio_config(&io_conf);
-}
-
 // The name of this function is important for Arduino compatibility.
 void setup() {
   // Map the model into a usable data structure. This doesn't involve any
@@ -105,7 +87,7 @@ void setup() {
   }
 
   if (tensor_arena == NULL) {
-    tensor_arena = (uint8_t *) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    tensor_arena = (uint8_t *) heap_caps_malloc(kTensorArenaSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   }
   if (tensor_arena == NULL) {
     printf("Couldn't allocate memory of %d bytes\n", kTensorArenaSize);
@@ -146,10 +128,6 @@ void setup() {
   // Get information about the memory area to use for the model's input.
   input = interpreter->input(0);
 
-  button_initialize();
-
-
-
 #ifndef CLI_ONLY_INFERENCE
   // Initialize Camera
   TfLiteStatus init_status = InitCamera();
@@ -163,10 +141,6 @@ void setup() {
 #ifndef CLI_ONLY_INFERENCE
 // The name of this function is important for Arduino compatibility.
 void loop() {
-  while(1) {
-    int button_state = gpio_get_level(BUTTON_PIN);
-
-    if (button_state == 1 && last_button_state == 0) {
       // Get image from provider.
       if (kTfLiteOk != GetImage(kNumCols, kNumRows, kNumChannels, input->data.int8)) {
         MicroPrintf("Image capture failed.");
@@ -210,16 +184,6 @@ void loop() {
       } else if (delay_code == false) {
         vTaskDelay(1);
       }  
-
-
-    }
-  }
-
-
-  
-
-
-
 }
 #endif
 
