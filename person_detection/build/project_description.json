@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "person_detection",
-    "project_version":    "9ea8ce0-dirty",
+    "project_version":    "f038677-dirty",
     "project_path":       "C:/Users/chiar/Desktop/PDS-P3/person_detection",
     "idf_path":           "C:/Users/chiar/esp/v5.2.1/esp-idf",
     "build_dir":          "C:/Users/chiar/Desktop/PDS-P3/person_detection/build",
@@ -2202,18 +2202,6 @@
             "managed_priv_reqs": [],
             "include_dirs": [ "include", "src/common" ]
         },
-        "espressif__esp32-camera": {
-            "alias": "idf::espressif__esp32-camera",
-            "target": "___idf_espressif__esp32-camera",
-            "prefix": "idf",
-            "dir": "C:/Users/chiar/Desktop/PDS-P3/person_detection/managed_components/espressif__esp32-camera",
-            "lib": "__idf_espressif__esp32-camera",
-            "reqs": [ "driver" ],
-            "priv_reqs": [ "freertos", "nvs_flash", "esp_timer" ],
-            "managed_reqs": [],
-            "managed_priv_reqs": [],
-            "include_dirs": [ "driver/include", "conversions/include" ]
-        },
         "espressif__esp-tflite-micro": {
             "alias": "idf::espressif__esp-tflite-micro",
             "target": "___idf_espressif__esp-tflite-micro",
@@ -2225,6 +2213,18 @@
             "managed_reqs": [],
             "managed_priv_reqs": [ "espressif__esp-nn" ],
             "include_dirs": [ ".", "third_party/gemmlowp", "third_party/flatbuffers/include", "third_party/ruy", "third_party/kissfft", "signal/micro/kernels", "signal/src", "signal/src/kiss_fft_wrappers" ]
+        },
+        "espressif__esp32-camera": {
+            "alias": "idf::espressif__esp32-camera",
+            "target": "___idf_espressif__esp32-camera",
+            "prefix": "idf",
+            "dir": "C:/Users/chiar/Desktop/PDS-P3/person_detection/managed_components/espressif__esp32-camera",
+            "lib": "__idf_espressif__esp32-camera",
+            "reqs": [ "driver" ],
+            "priv_reqs": [ "freertos", "nvs_flash", "esp_timer" ],
+            "managed_reqs": [],
+            "managed_priv_reqs": [],
+            "include_dirs": [ "driver/include", "conversions/include" ]
         }
     },
     "debug_prefix_map_gdbinit": ""

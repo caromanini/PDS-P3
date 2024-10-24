@@ -21,6 +21,8 @@ limitations under the License.
 extern "C" {
 #endif
 
+extern int flag_button;
+
 // Initializes all data needed for the example. The name is important, and needs
 // to be setup() for Arduino compatibility.
 void setup();

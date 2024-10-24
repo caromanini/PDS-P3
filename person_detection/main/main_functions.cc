@@ -43,9 +43,11 @@ limitations under the License.
 #define TIME_THRESHOLD_SEC 5
 #define FRAME_RATE 10
 
-// #define BUTTON_PIN 15
+#define BUTTON_PIN static_cast<gpio_num_t>(15)
+#define BUTTON_PIN2 static_cast<gpio_num_t>(14)
 
-// static int last_button_state = 0;
+int last_button_state = 0;
+int last_button_state2 = 0;
 
 int detection_count = 0;
 int frame_count = 0;
@@ -140,7 +142,28 @@ void setup() {
 
 #ifndef CLI_ONLY_INFERENCE
 // The name of this function is important for Arduino compatibility.
+int locker = 0;
+int flag_button = 1;
+
 void loop() {
+      while (flag_button == 1) {
+        printf("ESTAMOS EN LA FUNCION DEL BOTON!!!!");
+        int button_state1 = gpio_get_level(BUTTON_PIN);
+        int button_state2 = gpio_get_level(BUTTON_PIN2);
+
+        if (button_state1 == 1 && last_button_state == 0) {
+          locker = 1;
+          flag_button = 0;
+        }
+        if (button_state2 == 1 && last_button_state2 == 0) {
+          locker = 2;
+          flag_button = 0;
+        }
+
+        last_button_state = button_state1;
+        last_button_state2 = button_state2;
+      }
+
       // Get image from provider.
       if (kTfLiteOk != GetImage(kNumCols, kNumRows, kNumChannels, input->data.int8)) {
         MicroPrintf("Image capture failed.");
@@ -178,7 +201,7 @@ void loop() {
           (blank_score - output->params.zero_point) * output->params.scale;   
           
       // Respond to detection
-      bool delay_code = RespondToDetection(first_score_f, second_score_f, third_score_f, fourth_score_f, fifth_score_f, sixth_score_f, blank_score_f);
+      bool delay_code = RespondToDetection(first_score_f, second_score_f, third_score_f, fourth_score_f, fifth_score_f, sixth_score_f, blank_score_f, locker);
       if (delay_code == true) {
         vTaskDelay(1);
       } else if (delay_code == false) {
@@ -243,7 +266,7 @@ void run_inference(void *ptr) {
   float blank_score_f =
       (blank_score - output->params.zero_point) * output->params.scale;    
 
-  RespondToDetection(first_score_f, second_score_f, third_score_f, fourth_score_f, fifth_score_f, sixth_score_f, blank_score_f);
+  RespondToDetection(first_score_f, second_score_f, third_score_f, fourth_score_f, fifth_score_f, sixth_score_f, blank_score_f, locker);
 
   frame_count += 1;
 }

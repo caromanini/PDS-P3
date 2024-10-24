@@ -30,15 +30,19 @@ limitations under the License.
 #include "driver/mcpwm.h"
 #include "soc/mcpwm_periph.h"
 
-
 // Configuraciones del SERVO
 #define SERVO_PIN 12
+#define SERVO_PIN2 13
 #define BUTTON_PIN static_cast<gpio_num_t>(15)
+#define BUTTON_PIN2 static_cast<gpio_num_t>(14)
 
-int last_button_state = 0;
-int locker_open = 0;
+int last_button_state1_a = 0;
+int last_button_state2_a = 0;
+int locker1_open = 0;
+int locker2_open = 0;
 
 #include "detection_responder.h"
+#include "main_functions.h"
 #include "tensorflow/lite/micro/micro_log.h"
 
 #include "driver/gpio.h"
@@ -87,21 +91,13 @@ static void create_gui(void)
 void mcpwm_example_gpio_initialize(void) {
     printf("Initializing MCPWM servo control...\n");
     mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, SERVO_PIN);
+    mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0B, SERVO_PIN2);
 }
 
-// Function to calculate pulse width for a given angle
-// static uint32_t servo_per_degree_init(uint32_t degree_of_rotation) {
-//     uint32_t cal_pulsewidth = 0;
-//     cal_pulsewidth = (SERVO_MIN_PULSEWIDTH + (((SERVO_MAX_PULSEWIDTH - SERVO_MIN_PULSEWIDTH) * (degree_of_rotation)) / (SERVO_MAX_DEGREE)));
-//     return cal_pulsewidth;
-// }
-
-
-
-void servo_control(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num, float angle) {
+void servo_control(mcpwm_unit_t mcpwm_num, mcpwm_timer_t timer_num, mcpwm_operator_t op, float angle) {
     // Calculate pulse width (500us - 2500us) corresponding to the angle (-90° - 270°)
     uint32_t duty_us = (500 + ((angle + 90) / 360.0) * 2000);
-    mcpwm_set_duty_in_us(mcpwm_num, timer_num, MCPWM_OPR_A, duty_us);
+    mcpwm_set_duty_in_us(mcpwm_num, timer_num, op, duty_us);
 }
 
 #include <queue>
@@ -117,12 +113,16 @@ std::string clave1_pos1 = "blank_score";
 std::string clave1_pos2 = "blank_score";
 std::string clave1_pos3 = "blank_score";
 
+std::string clave2_pos0 = "second_score";
+std::string clave2_pos1 = "second_score";
+std::string clave2_pos2 = "second_score";
+std::string clave2_pos3 = "second_score";
+
 std::string clave_locker1[4] = { clave1_pos0, clave1_pos1, clave1_pos2, clave1_pos3};
+std::string clave_locker2[4] = { clave2_pos0, clave2_pos1, clave2_pos2, clave2_pos3};
 
-
-bool detectClasses() {
+void detectClasses(int locker_number) {
   mcpwm_example_gpio_initialize();
-  // button_initialize();
 
   mcpwm_config_t pwm_config;
   pwm_config.frequency = 50;  // Frequency = 50Hz, i.e., 20ms period for servos
@@ -132,7 +132,6 @@ bool detectClasses() {
   pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
   mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_0, &pwm_config); 
 
-
   printf("CLASES DETECTADAS: ");
   for (int i = 0; i < 4; ++i) {
     printf("%s ", mostFrequentClasses[i].c_str());
@@ -140,44 +139,70 @@ bool detectClasses() {
   printf("\n");
 
   bool unlock1 = true;
+  bool unlock2 = true;
 
-  for (int i = 0; i<4; ++i) {
-    printf("MOST FREQUENT CLASSES[i]: %s\n", mostFrequentClasses[i].c_str());
-    printf("CLAVE LOCKER[i]: %s\n", clave_locker1[i].c_str());
-    if (mostFrequentClasses[i] != clave_locker1[i]) {
-      printf("CLAVE NO COINCIDE");
-      unlock1 = false;
-      break;
+  if (locker_number == 1) {
+    printf("LOCKER 1");
+    for (int i = 0; i<4; ++i) {
+      if(mostFrequentClasses[i] != clave_locker1[i]) {
+        unlock1 = false;
+      }
+    }
+  } else if (locker_number == 2) {
+    printf("LOCKER 2");
+    for (int i = 0; i<4; ++i) {
+      if(mostFrequentClasses[i] != clave_locker2[i]) {
+        unlock2 = false;
+      }
     }
   }
 
-  if (unlock1 == true) {
-    printf("ABRIR LOCKER\n");
+  if (locker_number == 1 && unlock1 == true) {
+    printf("ABRIR LOCKER 1\n");
     for(int angle=-90; angle<=270; angle++){
-          servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
+          servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, angle);
     }
-    locker_open = 1;
+    locker1_open = 1;
 
-    while(locker_open == 1) {
-      int button_state = gpio_get_level(BUTTON_PIN);
-      printf("BUTTON STATE: %d\n", button_state);
+    while(locker1_open == 1) {
+      int button_state1 = gpio_get_level(BUTTON_PIN);
+      printf("BUTTON STATE: %d\n", button_state1);
 
-      if(button_state == 1 && last_button_state == 0){
+      if(button_state1 == 1 && last_button_state1_a == 0){
         for(int angle=270; angle>=-90; angle--){
-          servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, angle);
+          servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, angle);
         }
-        locker_open = 0;
+        locker1_open = 0;
       }
-      last_button_state = button_state;
+      last_button_state1_a = button_state1;
     }
 
-    return true;
-  } else {
-    return false;
-  }     
+    flag_button = 1;
+
+  } else if (locker_number == 2 && unlock2 == true) {
+    printf("ABRIR LOCKER 2\n");
+    for(int angle=-90; angle<=270; angle++){
+          servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, angle);
+    }
+    locker2_open = 1;
+
+    while(locker2_open == 1) {
+      int button_state2 = gpio_get_level(BUTTON_PIN2);
+      printf("BUTTON STATE: %d\n", button_state2);
+
+      if(button_state2 == 1 && last_button_state2_a == 0){
+        for(int angle=270; angle>=-90; angle--){
+          servo_control(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, angle);
+        }
+        locker2_open = 0;
+      }
+      last_button_state2_a      = button_state2;
+    }
+    flag_button = 1;
+  }
 }
 
-bool RespondToDetection(float first_score, float second_score, float third_score, float fourth_score, float fifth_score, float sixth_score, float blank_score) {
+bool RespondToDetection(float first_score, float second_score, float third_score, float fourth_score, float fifth_score, float sixth_score, float blank_score, int locker) {
   int first_score_int = (first_score) * 100 + 0.5;
   int second_score_int = (second_score) * 100 + 0.5;
   int third_score_int = (third_score) * 100 + 0.5;
@@ -234,8 +259,7 @@ bool RespondToDetection(float first_score, float second_score, float third_score
     printf("CLASS DETECTED: %s\n", mostFrequentClass.c_str());
 
     if (index == 0) {
-      // bool unlock_locker = detectClasses();
-      detectClasses();
+      detectClasses(locker);
       std::fill(std::begin(mostFrequentClasses), std::end(mostFrequentClasses), "");
     }
 
